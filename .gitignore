@@ -1,0 +1,37 @@
+# Node
+node-backend/node_modules/
+Frontend/node_modules/
+Frontend/dist/
+*.log
+npm-debug.log*
+
+# Java / Maven
+backend/target/
+*.class
+*.jar
+*.war
+
+# Python / Gateway
+gateway/__pycache__/
+gateway/controllers/__pycache__/
+gateway/utils/__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+__pycache__/
+
+# Eclipse
+.metadata/
+.settings/
+.classpath
+.project
+*.launch
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+*.env
