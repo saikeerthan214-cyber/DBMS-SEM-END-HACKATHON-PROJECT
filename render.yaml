@@ -78,7 +78,6 @@ services:
   - type: web
     name: searchai-frontend
     runtime: static
-    plan: free
     rootDir: Frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
