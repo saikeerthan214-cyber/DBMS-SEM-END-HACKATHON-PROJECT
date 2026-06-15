@@ -269,8 +269,35 @@ app.delete('/node/saved-items/:id', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MONGODB ROUTES — User Activity
+// MONGODB ROUTES — Users Mirror
 // ─────────────────────────────────────────────────────────────────────────────
+app.get('/node/users', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'MongoDB not connected' });
+  try {
+    const docs = await db.collection('users')
+      .find({}, { projection: { password: 0 } }) // never expose password
+      .sort({ registeredAt: -1 })
+      .toArray();
+    res.json(docs);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/node/users', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'MongoDB not connected' });
+  const { username, email, role } = req.body;
+  if (!username || !email) return res.status(400).json({ error: 'username and email required' });
+  try {
+    // Upsert — update if exists, insert if not
+    const result = await db.collection('users').updateOne(
+      { username },
+      { $set: { username, email, role: role || 'USER', registeredAt: new Date() } },
+      { upsert: true }
+    );
+    res.status(201).json({ username, email, role: role || 'USER' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
 app.get('/node/activity/:username', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'MongoDB not connected' });
   try {

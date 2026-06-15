@@ -33,8 +33,18 @@ axios.interceptors.response.use(
 export const loginUser = (credentials) =>
   axios.post(`${BASE_URL}/auth/login`, credentials);
 
-export const registerUser = (userData) =>
-  axios.post(`${BASE_URL}/auth/register`, userData);
+export const registerUser = async (userData) => {
+  const response = await axios.post(`${BASE_URL}/auth/register`, userData);
+  // Mirror user to MongoDB for visibility in Atlas
+  try {
+    await axios.post(`${NODE_URL}/users`, {
+      username: userData.username,
+      email: userData.email,
+      role: userData.role || 'USER',
+    });
+  } catch { /* non-critical — don't block registration */ }
+  return response;
+};
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 
