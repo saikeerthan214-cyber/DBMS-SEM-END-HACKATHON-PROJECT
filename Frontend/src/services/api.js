@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// Use relative URL — Vite proxy forwards /api/* to http://localhost:8082
-// and /node/* to http://localhost:3001
-const BASE_URL  = '/api';
-const NODE_URL  = '/node';
+// In development: Vite proxy forwards /api/* → localhost:8082, /node/* → localhost:3001
+// In production (Render): VITE_API_BASE and VITE_NODE_BASE are set to the deployed service URLs
+const BASE_URL = import.meta.env.VITE_API_BASE || '/api';
+const NODE_URL = import.meta.env.VITE_NODE_BASE || '/node';
 
 // ── Request interceptor: attach JWT token ─────────────────────────────────────
 axios.interceptors.request.use((config) => {

@@ -1,0 +1,99 @@
+## render.yaml — Deploy all services to Render
+## Docs: https://render.com/docs/blueprint-spec
+
+services:
+
+  # ── 1. Spring Boot Backend ─────────────────────────────────────────────────
+  - type: web
+    name: searchai-spring-boot
+    runtime: java
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: mvn clean package -DskipTests
+    startCommand: java -jar target/searchplatform-0.0.1-SNAPSHOT.jar
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        value: jdbc:postgresql://dpg-d8nnppjtqb8s73dcrshg-a.oregon-postgres.render.com:5432/mth_qwvr
+      - key: SPRING_DATASOURCE_USERNAME
+        value: postgres_user
+      - key: SPRING_DATASOURCE_PASSWORD
+        value: DXdYOUMfmWMIIylOjd1pQ7IFUrxx8ic4
+      - key: JWT_SECRET
+        value: MySuperSecretKeyForJWTAuthenticationPlatform2024
+      - key: JAVA_OPTS
+        value: -Xmx256m -Xms128m
+    healthCheckPath: /api/categories
+
+  # ── 2. Node.js Backend ─────────────────────────────────────────────────────
+  - type: web
+    name: searchai-node-backend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: node-backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGO_URI
+        value: mongodb+srv://admin:Search123@cluster0.rzlkzgm.mongodb.net/searchai_mongo?retryWrites=true&w=majority&appName=Cluster0
+      - key: PG_HOST
+        value: dpg-d8nnppjtqb8s73dcrshg-a.oregon-postgres.render.com
+      - key: PG_PORT
+        value: "5432"
+      - key: PG_DATABASE
+        value: mth_qwvr
+      - key: PG_USER
+        value: postgres_user
+      - key: PG_PASSWORD
+        value: DXdYOUMfmWMIIylOjd1pQ7IFUrxx8ic4
+      - key: JWT_SECRET
+        value: MySuperSecretKeyForJWTAuthenticationPlatform2024
+      - key: PORT
+        value: "3001"
+      - key: NODE_TLS_REJECT_UNAUTHORIZED
+        value: "0"
+    healthCheckPath: /node/health
+
+  # ── 3. FastAPI Gateway ─────────────────────────────────────────────────────
+  - type: web
+    name: searchai-gateway
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: gateway
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SPRING_BOOT_BASE
+        value: https://searchai-spring-boot.onrender.com
+      - key: NODE_BACKEND_BASE
+        value: https://searchai-node-backend.onrender.com
+      - key: JWT_SECRET
+        value: MySuperSecretKeyForJWTAuthenticationPlatform2024
+      - key: RATE_LIMIT_DEFAULT
+        value: 120/minute
+      - key: RATE_LIMIT_AUTH
+        value: 20/minute
+      - key: GATEWAY_TIMEOUT
+        value: "30"
+    healthCheckPath: /gateway/health
+
+  # ── 4. React Frontend (Static Site) ───────────────────────────────────────
+  - type: web
+    name: searchai-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: Frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://searchai-spring-boot.onrender.com/api
+      - key: VITE_NODE_BASE
+        value: https://searchai-node-backend.onrender.com/node
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

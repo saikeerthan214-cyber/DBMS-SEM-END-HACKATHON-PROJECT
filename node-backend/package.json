@@ -4,7 +4,7 @@
   "description": "Node.js secondary backend for SearchAI - handles search logs, trending and analytics",
   "main": "server.js",
   "scripts": {
-    "start": "node --openssl-legacy-provider server.js",
+    "start": "node server.js",
     "dev": "nodemon --openssl-legacy-provider server.js"
   },
   "dependencies": {
