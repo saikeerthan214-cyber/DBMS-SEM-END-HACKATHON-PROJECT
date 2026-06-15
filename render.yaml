@@ -3,15 +3,14 @@
 
 services:
 
-  # ── 1. Spring Boot Backend ─────────────────────────────────────────────────
+  # ── 1. Spring Boot Backend (Docker) ───────────────────────────────────────
   - type: web
     name: searchai-spring-boot
-    runtime: java
+    runtime: docker
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: mvn clean package -DskipTests
-    startCommand: java -jar target/searchplatform-0.0.1-SNAPSHOT.jar
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: SPRING_DATASOURCE_URL
         value: jdbc:postgresql://dpg-d8nnppjtqb8s73dcrshg-a.oregon-postgres.render.com:5432/mth_qwvr
@@ -21,8 +20,6 @@ services:
         value: DXdYOUMfmWMIIylOjd1pQ7IFUrxx8ic4
       - key: JWT_SECRET
         value: MySuperSecretKeyForJWTAuthenticationPlatform2024
-      - key: JAVA_OPTS
-        value: -Xmx256m -Xms128m
     healthCheckPath: /api/categories
 
   # ── 2. Node.js Backend ─────────────────────────────────────────────────────
@@ -49,8 +46,6 @@ services:
         value: DXdYOUMfmWMIIylOjd1pQ7IFUrxx8ic4
       - key: JWT_SECRET
         value: MySuperSecretKeyForJWTAuthenticationPlatform2024
-      - key: PORT
-        value: "3001"
       - key: NODE_TLS_REJECT_UNAUTHORIZED
         value: "0"
     healthCheckPath: /node/health
@@ -83,7 +78,6 @@ services:
   - type: web
     name: searchai-frontend
     runtime: static
-    region: oregon
     plan: free
     rootDir: Frontend
     buildCommand: npm install && npm run build
