@@ -4,6 +4,10 @@ All service URLs and tuneable knobs live here — change once, applies everywher
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load .env file if present
+load_dotenv()
 
 # ── Backend service base URLs ─────────────────────────────────────────────────
 SPRING_BOOT_BASE: str = os.getenv("SPRING_BOOT_BASE", "http://127.0.0.1:8082")

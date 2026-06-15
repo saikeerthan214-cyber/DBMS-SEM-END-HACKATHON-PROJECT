@@ -8,6 +8,9 @@
 // Fix SSL for Node.js v24 + Windows
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express        = require('express');
 const { Pool }       = require('pg');
 const { MongoClient, ObjectId } = require('mongodb');
@@ -63,7 +66,7 @@ function requireAdmin(req, res, next) {
 }
 
 const app  = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -72,9 +75,11 @@ app.use(express.json());
 // POSTGRESQL
 // ─────────────────────────────────────────────────────────────────────────────
 const pool = new Pool({
-  host: 'localhost', port: 5432,
-  database: 'search_platform',
-  user: 'postgres', password: 'admin@123',
+  host:     process.env.PG_HOST     || 'localhost',
+  port:     process.env.PG_PORT     || 5432,
+  database: process.env.PG_DATABASE || 'search_platform',
+  user:     process.env.PG_USER     || 'postgres',
+  password: process.env.PG_PASSWORD || 'admin@123',
 });
 
 pool.query(`
@@ -91,7 +96,7 @@ pool.query(`
 // ─────────────────────────────────────────────────────────────────────────────
 // MONGODB ATLAS (with SSL options for Windows Node.js)
 // ─────────────────────────────────────────────────────────────────────────────
-const MONGO_URI = 'mongodb+srv://admin:Search123@cluster0.rzlkzgm.mongodb.net/searchai_mongo?retryWrites=true&w=majority&appName=Cluster0';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:Search123@cluster0.rzlkzgm.mongodb.net/searchai_mongo?retryWrites=true&w=majority&appName=Cluster0';
 
 const mongoOptions = {
   tls: true,
