@@ -27,6 +27,7 @@ from controllers.authenticationController import router as auth_router
 from controllers.nodeController import router as node_router
 from controllers.planController import router as items_router
 from controllers.subscriptionController import router as categories_router
+from controllers.userController import router as users_router
 from middleware.error_handler import register_error_handlers
 from utils.config import (
     CORS_ORIGINS,
@@ -142,6 +143,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(auth_router)
 app.include_router(items_router)
 app.include_router(categories_router)
+app.include_router(users_router)
 app.include_router(node_router)
 
 
