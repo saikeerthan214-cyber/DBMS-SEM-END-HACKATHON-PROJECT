@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAllItems, getAllCategories, searchItems } from '../services/api';
+import {
+  getAllItems, getAllCategories, searchItems,
+  getSavedItems, saveItem, unsaveItem,
+  getReviews, addReview,
+  getTrending, getUserActivity, logActivity,
+} from '../services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MOCK / STATIC DATA
@@ -10,10 +15,12 @@ import { getAllItems, getAllCategories, searchItems } from '../services/api';
 const NAV = [
   { id: 'dashboard',     label: 'Dashboard',       icon: '⬡' },
   { id: 'explore',       label: 'Explore',          icon: '🔍' },
-  { id: 'saved',         label: 'Saved Items',      icon: '❤️', badge: 4 },
+  { id: 'saved',         label: 'Saved Items',      icon: '❤️' },
   { id: 'searches',      label: 'Saved Searches',   icon: '🔖' },
   { id: 'recommendations',label: 'For You',         icon: '✨' },
   { id: 'recent',        label: 'Recently Viewed',  icon: '🕐' },
+  { id: 'reviews',       label: 'Reviews',          icon: '⭐' },
+  { id: 'activity',      label: 'My Activity',      icon: '📋' },
   { id: 'notifications', label: 'Notifications',    icon: '🔔', badge: 3 },
   { id: 'profile',       label: 'Profile',          icon: '👤' },
   { id: 'settings',      label: 'Settings',         icon: '⚙️' },
@@ -92,7 +99,7 @@ function ProductCard({ item, saved, onToggleSave, index = 0 }) {
         {/* Save button */}
         <motion.button
           whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }}
-          onClick={e => { e.stopPropagation(); onToggleSave(item.id); }}
+          onClick={e => { e.stopPropagation(); onToggleSave(item); }}
           className="absolute top-2.5 right-2.5 w-7 h-7 glass rounded-full flex items-center justify-center border border-white/10 transition-all"
           style={{ color: saved ? '#f472b6' : '#64748b' }}
         >
@@ -128,13 +135,25 @@ export default function UserDashboard() {
   const [sidebarOpen,    setSidebarOpen]     = useState(true);
   const [items,          setItems]           = useState([]);
   const [categories,     setCategories]      = useState([]);
-  const [savedIds,       setSavedIds]        = useState([1, 3, 5, 7]);
+  // savedIds: array of item IDs (numbers) for fast lookup
+  const [savedIds,       setSavedIds]        = useState([]);
+  // savedDocs: full MongoDB docs [ { _id, itemId, itemTitle, ... } ]
+  const [savedDocs,      setSavedDocs]       = useState([]);
   const [notifications,  setNotifications]   = useState(NOTIFICATIONS);
   const [savedSearches,  setSavedSearches]   = useState(SAVED_SEARCHES);
   const [searchQ,        setSearchQ]         = useState('');
   const [searchResults,  setSearchResults]   = useState([]);
   const [searching,      setSearching]       = useState(false);
   const [profileComplete] = useState(72);
+  // Reviews
+  const [reviews,        setReviews]         = useState([]);
+  const [reviewItemId,   setReviewItemId]     = useState(null);
+  const [reviewForm,     setReviewForm]       = useState({ rating: 5, comment: '' });
+  const [reviewLoading,  setReviewLoading]    = useState(false);
+  // Trending
+  const [trending,       setTrending]         = useState([]);
+  // Activity
+  const [activity,       setActivity]         = useState([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -143,6 +162,23 @@ export default function UserDashboard() {
       const [iRes, cRes] = await Promise.all([getAllItems(), getAllCategories()]);
       setItems(iRes.data || []);
       setCategories(cRes.data || []);
+    } catch {}
+    // Load saved items from Node.js / MongoDB
+    try {
+      const sRes = await getSavedItems(username);
+      const docs = sRes.data || [];
+      setSavedDocs(docs);
+      setSavedIds(docs.map(d => d.itemId));
+    } catch {}
+    // Load trending searches
+    try {
+      const tRes = await getTrending();
+      setTrending(tRes.data || []);
+    } catch {}
+    // Load user activity
+    try {
+      const aRes = await getUserActivity(username);
+      setActivity(aRes.data || []);
     } catch {}
   };
 
@@ -155,15 +191,51 @@ export default function UserDashboard() {
     } catch {} finally { setSearching(false); }
   }, []);
 
-  const toggleSave = (id) => setSavedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSave = async (item) => {
+    const alreadySaved = savedIds.includes(item.id);
+    if (alreadySaved) {
+      // Find the MongoDB doc for this item
+      const doc = savedDocs.find(d => d.itemId === item.id);
+      setSavedIds(prev => prev.filter(x => x !== item.id));
+      setSavedDocs(prev => prev.filter(d => d.itemId !== item.id));
+      if (doc?._id) {
+        try { await unsaveItem(doc._id); } catch {}
+      }
+    } else {
+      // Optimistic update first
+      setSavedIds(prev => [...prev, item.id]);
+      try {
+        const res = await saveItem({
+          username,
+          itemId: item.id,
+          itemTitle: item.title,
+          category: item.category?.name,
+          price: item.price,
+        });
+        setSavedDocs(prev => [...prev, res.data]);
+      } catch (e) {
+        // Revert if duplicate (409) or other error
+        setSavedIds(prev => prev.filter(x => x !== item.id));
+        if (e.response?.status !== 409) return;
+        // 409 = already saved in DB, just reload
+        try {
+          const sRes = await getSavedItems(username);
+          const docs = sRes.data || [];
+          setSavedDocs(docs);
+          setSavedIds(docs.map(d => d.itemId));
+        } catch {}
+      }
+    }
+    // Log activity
+    logActivity({ username, action: alreadySaved ? 'unsave' : 'save', target: item.title }).catch(() => {});
+  };
   const deleteSearch = (id) => setSavedSearches(prev => prev.filter(s => s.id !== id));
   const toggleAlert  = (id) => setSavedSearches(prev => prev.map(s => s.id === id ? { ...s, alert: !s.alert } : s));
   const markAllRead  = () => setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
   const unreadCount  = notifications.filter(n => n.unread).length;
 
   const savedItems   = items.filter(i => savedIds.includes(i.id));
-  const recommended  = items.filter(i => !savedIds.includes(i.id)).slice(0, 6);
-  const catBreakdown = categories.map(c => ({
+  const recommended  = items.filter(i => !savedIds.includes(i.id)).slice(0, 6);  const catBreakdown = categories.map(c => ({
     name: c.name, count: items.filter(i => i.category?.id === c.id).length,
     color: CAT_COLORS[c.name] || '#64748b', icon: CAT_ICONS[c.name] || '📦',
   }));
@@ -729,6 +801,150 @@ export default function UserDashboard() {
                     </motion.div>
                   ))}
                 </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+
+            {/* ══ REVIEWS ════════════════════════════════════════════════ */}
+            {activeSection === 'reviews' && (
+              <motion.div key="reviews" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-black text-white">Write a Review</h2>
+                  <p className="text-slate-500 text-sm">Share your experience on items you have used</p>
+                </div>
+                {/* Select item */}
+                <div className="glass rounded-2xl p-5 border border-white/6 mb-5">
+                  <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Select Item</label>
+                  <select
+                    className="w-full glass bg-transparent rounded-xl px-4 py-2.5 text-sm text-white border border-white/10 focus:outline-none focus:border-cyan-500/40 transition-all"
+                    value={reviewItemId || ''}
+                    onChange={async e => {
+                      const id = Number(e.target.value);
+                      setReviewItemId(id || null);
+                      if (id) {
+                        try { const r = await getReviews(id); setReviews(r.data || []); } catch {}
+                      } else { setReviews([]); }
+                    }}
+                  >
+                    <option value="">— Choose an item —</option>
+                    {items.map(it => (
+                      <option key={it.id} value={it.id}>{it.title} — ₹{it.price?.toLocaleString('en-IN')}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Existing reviews */}
+                {reviewItemId && (
+                  <div className="mb-5">
+                    <h3 className="text-white font-semibold text-sm mb-3">Reviews ({reviews.length})</h3>
+                    {reviews.length === 0 ? (
+                      <p className="text-slate-500 text-sm py-4 text-center">No reviews yet. Be the first!</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {reviews.map(r => (
+                          <div key={r._id} className="glass rounded-2xl p-4 border border-white/6">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
+                                  {r.username?.[0]?.toUpperCase()}
+                                </div>
+                                <span className="text-white text-sm font-medium">{r.username}</span>
+                              </div>
+                              <div className="flex items-center gap-0.5 text-yellow-400 text-sm">
+                                {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                              </div>
+                            </div>
+                            <p className="text-slate-300 text-sm">{r.comment}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Submit review form */}
+                {reviewItemId && (
+                  <div className="glass rounded-2xl p-5 border border-white/6">
+                    <h3 className="text-white font-semibold text-sm mb-4">Your Review</h3>
+                    <div className="mb-4">
+                      <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Rating</label>
+                      <div className="flex gap-2">
+                        {[1,2,3,4,5].map(star => (
+                          <button key={star} onClick={() => setReviewForm(f => ({ ...f, rating: star }))}
+                            className={`text-2xl transition-transform hover:scale-110 ${star <= reviewForm.rating ? 'text-yellow-400' : 'text-slate-600'}`}>
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Comment</label>
+                      <textarea
+                        rows={3}
+                        value={reviewForm.comment}
+                        onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
+                        placeholder="Share your honest experience..."
+                        className="w-full glass bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 border border-white/10 focus:outline-none focus:border-cyan-500/40 transition-all resize-none"
+                      />
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                      disabled={reviewLoading || !reviewForm.comment.trim()}
+                      onClick={async () => {
+                        if (!reviewItemId || !reviewForm.comment.trim()) return;
+                        setReviewLoading(true);
+                        try {
+                          const selectedItem = items.find(it => it.id === reviewItemId);
+                          const res = await addReview({
+                            itemId: reviewItemId,
+                            itemTitle: selectedItem?.title || '',
+                            username,
+                            rating: reviewForm.rating,
+                            comment: reviewForm.comment,
+                          });
+                          setReviews(prev => [res.data, ...prev]);
+                          setReviewForm({ rating: 5, comment: '' });
+                          logActivity({ username, action: 'review', target: selectedItem?.title }).catch(() => {});
+                        } catch {}
+                        setReviewLoading(false);
+                      }}
+                      className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-violet-600 rounded-xl text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {reviewLoading ? 'Submitting...' : 'Submit Review'}
+                    </motion.button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* ══ ACTIVITY ═══════════════════════════════════════════════ */}
+            {activeSection === 'activity' && (
+              <motion.div key="activity" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-black text-white">My Activity</h2>
+                  <p className="text-slate-500 text-sm">Your recent actions on the platform</p>
+                </div>
+                {activity.length === 0 ? (
+                  <p className="text-slate-500 text-sm text-center py-12">No activity recorded yet. Start searching and saving items!</p>
+                ) : (
+                  <div className="glass rounded-2xl border border-white/6 divide-y divide-white/5">
+                    {activity.map((a, i) => (
+                      <motion.div key={a._id || i}
+                        initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                        className="flex items-center gap-4 px-5 py-4 hover:bg-white/3 transition-all">
+                        <div className="w-9 h-9 rounded-xl glass border border-white/8 flex items-center justify-center text-lg flex-shrink-0">
+                          {a.action === 'search' ? '🔍' : a.action === 'save' ? '❤️' : a.action === 'unsave' ? '💔' : a.action === 'review' ? '⭐' : '📋'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium capitalize">{a.action} — <span className="text-slate-300">{a.target}</span></p>
+                          {a.metadata && <p className="text-slate-500 text-xs mt-0.5">{JSON.stringify(a.metadata)}</p>}
+                        </div>
+                        <p className="text-xs text-slate-600 flex-shrink-0">{new Date(a.performedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             )}
 

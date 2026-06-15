@@ -1,8 +1,9 @@
 import axios from 'axios';
 
-// Use relative URL — Vite proxy forwards /api/* to http://localhost:8080
-// This eliminates all CORS issues completely
-const BASE_URL = '/api';
+// Use relative URL — Vite proxy forwards /api/* to http://localhost:8082
+// and /node/* to http://localhost:3001
+const BASE_URL  = '/api';
+const NODE_URL  = '/node';
 
 // ── Request interceptor: attach JWT token ─────────────────────────────────────
 axios.interceptors.request.use((config) => {
@@ -40,6 +41,9 @@ export const registerUser = (userData) =>
 export const getAllItems = () =>
   axios.get(`${BASE_URL}/items`);
 
+export const getItemById = (id) =>
+  axios.get(`${BASE_URL}/items/${id}`);
+
 export const searchItems = (keyword) =>
   axios.get(`${BASE_URL}/items/search`, { params: { keyword } });
 
@@ -48,8 +52,16 @@ export const searchItemsByCategory = (keyword, categoryId) =>
     params: { keyword, categoryId },
   });
 
+export const searchItemsWithFilters = (keyword, categoryId, minPrice, maxPrice) =>
+  axios.get(`${BASE_URL}/items/search`, {
+    params: { keyword, categoryId, minPrice, maxPrice },
+  });
+
 export const addItem = (item) =>
   axios.post(`${BASE_URL}/items`, item);
+
+export const updateItem = (id, item) =>
+  axios.put(`${BASE_URL}/items/${id}`, item);
 
 export const deleteItem = (id) =>
   axios.delete(`${BASE_URL}/items/${id}`);
@@ -64,3 +76,58 @@ export const addCategory = (category) =>
 
 export const deleteCategory = (id) =>
   axios.delete(`${BASE_URL}/categories/${id}`);
+
+// ── Users (Admin) ─────────────────────────────────────────────────────────────
+
+export const getAllUsers = () =>
+  axios.get(`${BASE_URL}/users`);
+
+export const deleteUser = (id) =>
+  axios.delete(`${BASE_URL}/users/${id}`);
+
+// ── Node.js — Search Logs (PostgreSQL) ───────────────────────────────────────
+
+export const logSearch = (keyword, username, results) =>
+  axios.post(`${NODE_URL}/search-logs`, { keyword, username, results });
+
+export const getSearchLogs = () =>
+  axios.get(`${NODE_URL}/search-logs`);
+
+export const getTrending = () =>
+  axios.get(`${NODE_URL}/trending`);
+
+export const getAnalytics = () =>
+  axios.get(`${NODE_URL}/analytics`);
+
+export const deleteSearchLog = (id) =>
+  axios.delete(`${NODE_URL}/search-logs/${id}`);
+
+// ── Node.js — Reviews (MongoDB) ───────────────────────────────────────────────
+
+export const getReviews = (itemId) =>
+  axios.get(`${NODE_URL}/reviews`, { params: itemId ? { itemId } : {} });
+
+export const addReview = (review) =>
+  axios.post(`${NODE_URL}/reviews`, review);
+
+export const deleteReview = (id) =>
+  axios.delete(`${NODE_URL}/reviews/${id}`);
+
+// ── Node.js — Saved Items (MongoDB) ───────────────────────────────────────────
+
+export const getSavedItems = (username) =>
+  axios.get(`${NODE_URL}/saved-items/${username}`);
+
+export const saveItem = (data) =>
+  axios.post(`${NODE_URL}/saved-items`, data);
+
+export const unsaveItem = (id) =>
+  axios.delete(`${NODE_URL}/saved-items/${id}`);
+
+// ── Node.js — User Activity (MongoDB) ────────────────────────────────────────
+
+export const getUserActivity = (username) =>
+  axios.get(`${NODE_URL}/activity/${username}`);
+
+export const logActivity = (data) =>
+  axios.post(`${NODE_URL}/activity`, data);

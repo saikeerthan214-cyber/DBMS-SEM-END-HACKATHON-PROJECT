@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-mo
 import { useNavigate } from 'react-router-dom';
 import FilterPanel from '../components/FilterPanel';
 import ResultCard from '../components/ResultCard';
-import { getAllItems, searchItems, getAllCategories } from '../services/api';
+import { getAllItems, searchItems, getAllCategories, logSearch } from '../services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
@@ -276,7 +276,14 @@ function Home() {
     try {
       const res = q?.trim() ? await searchItems(q) : await getAllItems();
       const d   = res.data;
-      setItems(Array.isArray(d) ? d : d?.content ?? d?.items ?? []);
+      const results = Array.isArray(d) ? d : d?.content ?? d?.items ?? [];
+      setItems(results);
+
+      // Record search to Node.js backend (fire-and-forget — don't block UI)
+      if (!isInitial && q?.trim()) {
+        const username = localStorage.getItem('username') || 'anonymous';
+        logSearch(q.trim(), username, results.length).catch(() => {});
+      }
     } catch { setError('Search failed. Try again.'); }
     finally { setLoading(false); }
   }, []);

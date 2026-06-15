@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  getAllItems, addItem, deleteItem,
+  getAllItems, addItem, updateItem, deleteItem,
   getAllCategories, addCategory, deleteCategory,
+  getAllUsers, deleteUser,
+  getAnalytics, getSearchLogs, deleteSearchLog,
 } from '../services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +17,7 @@ const NAV_ITEMS = [
   { id: 'listings',    label: 'Listings',     icon: '📦' },
   { id: 'categories',  label: 'Categories',   icon: '🗂️' },
   { id: 'users',       label: 'Users',        icon: '👥' },
+  { id: 'searchlogs',  label: 'Search Logs',  icon: '🔍' },
   { id: 'approvals',   label: 'Approvals',    icon: '✅', badge: 3 },
   { id: 'analytics',   label: 'Analytics',    icon: '📈' },
   { id: 'activity',    label: 'Activity',     icon: '⚡' },
@@ -22,13 +25,7 @@ const NAV_ITEMS = [
   { id: 'settings',    label: 'Settings',     icon: '⚙️' },
 ];
 
-const MOCK_USERS = [
-  { id: 1, name: 'Arjun Sharma',  email: 'arjun@example.com',  role: 'USER',  status: 'Active',    joined: '2024-01-15', avatar: '👨‍💻' },
-  { id: 2, name: 'Priya Nair',    email: 'priya@example.com',  role: 'USER',  status: 'Active',    joined: '2024-02-20', avatar: '👩‍🎨' },
-  { id: 3, name: 'Rohan Mehta',   email: 'rohan@example.com',  role: 'ADMIN', status: 'Active',    joined: '2024-01-01', avatar: '👨‍🎓' },
-  { id: 4, name: 'Sneha Patel',   email: 'sneha@example.com',  role: 'USER',  status: 'Suspended', joined: '2024-03-10', avatar: '👩‍💼' },
-  { id: 5, name: 'Vikram Singh',  email: 'vikram@example.com', role: 'USER',  status: 'Active',    joined: '2024-04-05', avatar: '👨‍🔬' },
-];
+// MOCK_USERS removed — now loaded live from GET /api/users
 
 const MOCK_ACTIVITY = [
   { icon: '📦', msg: 'New listing "iPhone 15 Pro" added',       time: '2m ago',  color: 'text-cyan-400'   },
@@ -216,6 +213,9 @@ function AdminDashboard() {
   const [sidebarOpen,    setSidebarOpen]     = useState(true);
   const [items,          setItems]           = useState([]);
   const [categories,     setCategories]      = useState([]);
+  const [users,          setUsers]           = useState([]);
+  const [analytics,      setAnalytics]       = useState(null);
+  const [searchLogs,     setSearchLogs]      = useState([]);
   const [searchQuery,    setSearchQuery]     = useState('');
   const [catFilter,      setCatFilter]       = useState('');
   const [sortBy,         setSortBy]          = useState('title');
@@ -224,7 +224,8 @@ function AdminDashboard() {
   const [selectedIds,    setSelectedIds]     = useState([]);
   const [showAddItem,    setShowAddItem]      = useState(false);
   const [showAddCat,     setShowAddCat]       = useState(false);
-  const [itemForm,       setItemForm]        = useState({ title: '', description: '', price: '', category: { id: '' }, status: 'Active' });
+  const [editItem,       setEditItem]         = useState(null);
+  const [itemForm,       setItemForm]        = useState({ title: '', description: '', price: '', categoryId: '', status: 'Active' });
   const [catForm,        setCatForm]         = useState({ name: '', description: '' });
   const [itemError,      setItemError]       = useState('');
   const [catError,       setCatError]        = useState('');
@@ -232,18 +233,27 @@ function AdminDashboard() {
   const [globalSearch,   setGlobalSearch]    = useState('');
   const PAGE_SIZE = 8;
 
-  useEffect(() => { loadItems(); loadCategories(); }, []);
+  useEffect(() => { loadItems(); loadCategories(); loadUsers(); loadAnalytics(); loadSearchLogs(); }, []);
 
   const loadItems      = async () => { try { const r = await getAllItems();      setItems(r.data);      } catch { setItemError('Failed to load items.'); } };
   const loadCategories = async () => { try { const r = await getAllCategories(); setCategories(r.data); } catch {} };
+  const loadUsers      = async () => { try { const r = await getAllUsers();      setUsers(r.data || []); } catch {} };
+  const loadAnalytics  = async () => { try { const r = await getAnalytics();    setAnalytics(r.data);  } catch {} };
+  const loadSearchLogs = async () => { try { const r = await getSearchLogs();   setSearchLogs(r.data || []); } catch {} };
 
   const handleAddItem = async (e) => {
     e.preventDefault(); setItemError('');
     try {
-      await addItem({ ...itemForm, price: parseFloat(itemForm.price), category: itemForm.category.id ? { id: Number(itemForm.category.id) } : null });
-      setItemForm({ title: '', description: '', price: '', category: { id: '' }, status: 'Active' });
+      const payload = { title: itemForm.title, description: itemForm.description, price: parseFloat(itemForm.price), categoryId: itemForm.categoryId ? Number(itemForm.categoryId) : null };
+      if (editItem) {
+        await updateItem(editItem.id, payload);
+        setEditItem(null);
+      } else {
+        await addItem(payload);
+      }
+      setItemForm({ title: '', description: '', price: '', categoryId: '', status: 'Active' });
       setShowAddItem(false); loadItems();
-    } catch { setItemError('Failed to add item.'); }
+    } catch { setItemError('Failed to save item.'); }
   };
 
   const handleDeleteItem = async (id) => {
@@ -428,7 +438,7 @@ function AdminDashboard() {
                 <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                   {[
                     { icon: '📦', label: 'Total Listings',    value: items.length,      trend: '12%',  trendUp: true,  spark: SPARKS.listings,   color: '#00d4ff', border: 'border-cyan-500/20',   bg: 'from-cyan-500/10 to-blue-500/10'    },
-                    { icon: '👥', label: 'Active Users',       value: MOCK_USERS.filter(u=>u.status==='Active').length, trend: '8%', trendUp: true, spark: SPARKS.users, color: '#a78bfa', border: 'border-violet-500/20', bg: 'from-violet-500/10 to-purple-500/10' },
+                    { icon: '👥', label: 'Active Users',       value: users.length, trend: '8%', trendUp: true, spark: SPARKS.users, color: '#a78bfa', border: 'border-violet-500/20', bg: 'from-violet-500/10 to-purple-500/10' },
                     { icon: '🔍', label: 'Searches Today',    value: '2,847',           trend: '24%',  trendUp: true,  spark: SPARKS.searches,   color: '#00ff88', border: 'border-green-500/20',  bg: 'from-green-500/10 to-emerald-500/10'},
                     { icon: '💰', label: 'Avg Price',         value: `₹${avgPrice.toLocaleString('en-IN')}`, trend: '5%', trendUp: true, spark: SPARKS.revenue, color: '#f59e0b', border: 'border-amber-500/20', bg: 'from-amber-500/10 to-orange-500/10' },
                     { icon: '⏳', label: 'Pending Approvals', value: 3,                 trend: '2',    trendUp: false, spark: SPARKS.approvals,  color: '#f472b6', border: 'border-pink-500/20',   bg: 'from-pink-500/10 to-rose-500/10'    },
@@ -723,14 +733,14 @@ function AdminDashboard() {
               <motion.div key="users" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
                 <div className="mb-6">
                   <h1 className="text-2xl font-black text-white">Users</h1>
-                  <p className="text-slate-500 text-sm">{MOCK_USERS.length} registered users</p>
+                  <p className="text-slate-500 text-sm">{users.length} registered users</p>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                   {[
-                    { label: 'Total Users',     value: MOCK_USERS.length, icon: '👥', color: 'border-cyan-500/20',   bg: 'from-cyan-500/10 to-blue-500/10'    },
-                    { label: 'Active',          value: MOCK_USERS.filter(u=>u.status==='Active').length,    icon: '✅', color: 'border-green-500/20',  bg: 'from-green-500/10 to-emerald-500/10'},
-                    { label: 'Suspended',       value: MOCK_USERS.filter(u=>u.status==='Suspended').length,icon: '🚫', color: 'border-red-500/20',    bg: 'from-red-500/10 to-rose-500/10'    },
-                    { label: 'Admins',          value: MOCK_USERS.filter(u=>u.role==='ADMIN').length,      icon: '⚡', color: 'border-violet-500/20', bg: 'from-violet-500/10 to-purple-500/10'},
+                    { label: 'Total Users', value: users.length,                                      icon: '👥', color: 'border-cyan-500/20',   bg: 'from-cyan-500/10 to-blue-500/10'    },
+                    { label: 'Users',       value: users.filter(u=>u.role==='USER').length,           icon: '✅', color: 'border-green-500/20',  bg: 'from-green-500/10 to-emerald-500/10'},
+                    { label: 'Admins',      value: users.filter(u=>u.role==='ADMIN').length,          icon: '⚡', color: 'border-violet-500/20', bg: 'from-violet-500/10 to-purple-500/10'},
+                    { label: 'This Month',  value: users.filter(u => { try { return new Date(u.createdAt).getMonth() === new Date().getMonth(); } catch { return false; } }).length, icon: '📅', color: 'border-amber-500/20', bg: 'from-amber-500/10 to-orange-500/10'},
                   ].map((s, i) => (
                     <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
                       className={`glass rounded-2xl p-5 border ${s.color} bg-gradient-to-br ${s.bg}`}>
@@ -744,39 +754,42 @@ function AdminDashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-white/6">
-                        {['User','Email','Role','Status','Joined','Actions'].map(h => (
+                        {['User','Email','Role','Joined','Actions'].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {MOCK_USERS.map((u, i) => (
+                      {users.map((u, i) => (
                         <motion.tr key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.06 }}
                           className="border-b border-white/4 hover:bg-white/3 transition-all group">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/20 to-violet-600/20 border border-white/10 flex items-center justify-center text-base">{u.avatar}</div>
-                              <span className="text-white font-medium text-sm">{u.name}</span>
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 flex items-center justify-center text-sm font-bold text-white">
+                                {u.username?.[0]?.toUpperCase()}
+                              </div>
+                              <span className="text-white font-medium text-sm">{u.username}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-slate-400 text-xs">{u.email}</td>
                           <td className="px-4 py-3">
                             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${u.role === 'ADMIN' ? 'bg-violet-500/15 text-violet-300 border border-violet-500/25' : 'bg-white/8 text-slate-400 border border-white/10'}`}>{u.role}</span>
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${u.status === 'Active' ? 'bg-green-500/15 text-green-400 border border-green-500/25' : 'bg-red-500/15 text-red-400 border border-red-500/25'}`}>{u.status}</span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 text-xs">{u.joined}</td>
+                          <td className="px-4 py-3 text-slate-500 text-xs">{new Date(u.createdAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button className="px-3 py-1 glass rounded-lg text-xs text-slate-400 border border-white/8 hover:text-white transition-all">View</button>
-                              <button className={`px-3 py-1 rounded-lg text-xs border transition-all ${u.status === 'Active' ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'}`}>
-                                {u.status === 'Active' ? 'Suspend' : 'Activate'}
+                              <button
+                                onClick={async () => { if (window.confirm(`Delete user "${u.username}"?`)) { try { await deleteUser(u.id); loadUsers(); } catch {} } }}
+                                className="px-3 py-1 rounded-lg text-xs border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 transition-all">
+                                Delete
                               </button>
                             </div>
                           </td>
                         </motion.tr>
                       ))}
+                      {users.length === 0 && (
+                        <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 text-sm">No users found</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -963,6 +976,69 @@ function AdminDashboard() {
             )}
 
           </AnimatePresence>
+
+            {/* ══ SEARCH LOGS ════════════════════════════════════════════════ */}
+            {activeSection === 'searchlogs' && (
+              <motion.div key="searchlogs" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h1 className="text-2xl font-black text-white">Search Logs</h1>
+                    <p className="text-slate-500 text-sm">{searchLogs.length} recent searches</p>
+                  </div>
+                  <button onClick={loadSearchLogs} className="px-4 py-2 glass rounded-xl text-xs text-slate-400 border border-white/8 hover:text-white transition-all">↻ Refresh</button>
+                </div>
+                {analytics && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                    {[
+                      { label: 'Total Searches', value: analytics.totalSearches,   icon: '🔍', color: 'border-cyan-500/20',   bg: 'from-cyan-500/10 to-blue-500/10'    },
+                      { label: 'Listings',        value: analytics.totalListings,   icon: '📦', color: 'border-violet-500/20', bg: 'from-violet-500/10 to-purple-500/10'},
+                      { label: 'Reviews',         value: analytics.totalReviews,    icon: '⭐', color: 'border-amber-500/20',  bg: 'from-amber-500/10 to-orange-500/10' },
+                      { label: 'Saved Items',     value: analytics.totalSavedItems, icon: '❤️', color: 'border-pink-500/20',   bg: 'from-pink-500/10 to-rose-500/10'    },
+                    ].map((s, i) => (
+                      <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+                        className={`glass rounded-2xl p-5 border ${s.color} bg-gradient-to-br ${s.bg}`}>
+                        <div className="text-2xl mb-2">{s.icon}</div>
+                        <div className="text-2xl font-black text-white">{s.value}</div>
+                        <div className="text-xs text-slate-500">{s.label}</div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+                <div className="glass rounded-2xl border border-white/6 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/6">
+                        {['Keyword','User','Results','Time','Actions'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {searchLogs.map((log, i) => (
+                        <motion.tr key={log.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
+                          className="border-b border-white/4 hover:bg-white/3 transition-all group">
+                          <td className="px-4 py-3 text-white font-medium">{log.keyword}</td>
+                          <td className="px-4 py-3 text-slate-400 text-xs">{log.username}</td>
+                          <td className="px-4 py-3"><span className="px-2 py-1 bg-cyan-500/10 text-cyan-300 rounded-lg text-xs border border-cyan-500/20">{log.results}</span></td>
+                          <td className="px-4 py-3 text-slate-500 text-xs">{new Date(log.searched_at).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</td>
+                          <td className="px-4 py-3">
+                            <button onClick={async () => { try { await deleteSearchLog(log.id); loadSearchLogs(); } catch {} }}
+                              className="px-3 py-1 opacity-0 group-hover:opacity-100 rounded-lg text-xs border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 transition-all">
+                              Delete
+                            </button>
+                          </td>
+                        </motion.tr>
+                      ))}
+                      {searchLogs.length === 0 && (
+                        <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 text-sm">No search logs yet — searches will appear here automatically</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
         </main>
       </div>
 
@@ -985,7 +1061,7 @@ function AdminDashboard() {
           ))}
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Category</label>
-            <select value={itemForm.category.id} onChange={e => setItemForm(p => ({ ...p, category: { id: e.target.value } }))}
+          <select value={itemForm.categoryId} onChange={e => setItemForm(p => ({ ...p, categoryId: e.target.value }))}
               className="w-full glass rounded-xl px-4 py-3 text-sm text-slate-300 border border-white/8 focus:outline-none focus:border-cyan-500/40 bg-transparent">
               <option value="" className="bg-dark-800">Select category</option>
               {categories.map(c => <option key={c.id} value={c.id} className="bg-dark-800">{c.name}</option>)}
