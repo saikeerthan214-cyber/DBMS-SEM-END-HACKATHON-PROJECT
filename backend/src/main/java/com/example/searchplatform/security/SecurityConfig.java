@@ -65,6 +65,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT,    "/api/categories/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/categories/**").hasRole("ADMIN")
 
+                // ── User management → ADMIN only ───────────────
+                .requestMatchers("/api/users/**").hasRole("ADMIN")
+
                 // ── Everything else requires authentication ────
                 .anyRequest().authenticated()
             )
