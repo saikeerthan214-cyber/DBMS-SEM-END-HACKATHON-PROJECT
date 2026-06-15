@@ -77,9 +77,10 @@ app.use(express.json());
 const pool = new Pool({
   host:     process.env.PG_HOST     || 'localhost',
   port:     process.env.PG_PORT     || 5432,
-  database: process.env.PG_DATABASE || 'search_platform',
-  user:     process.env.PG_USER     || 'postgres',
-  password: process.env.PG_PASSWORD || 'admin@123',
+  database: process.env.PG_DATABASE || 'mth_qwvr',
+  user:     process.env.PG_USER     || 'postgres_user',
+  password: process.env.PG_PASSWORD || 'DXdYOUMfmWMIIylOjd1pQ7IFUrxx8ic4',
+  ssl: { rejectUnauthorized: false },  // required for Render PostgreSQL
 });
 
 pool.query(`
