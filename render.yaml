@@ -53,12 +53,11 @@ services:
   # ── 3. FastAPI Gateway ─────────────────────────────────────────────────────
   - type: web
     name: searchai-gateway
-    runtime: python
+    runtime: docker
     region: oregon
     plan: free
     rootDir: gateway
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: SPRING_BOOT_BASE
         value: https://searchai-spring-boot.onrender.com
