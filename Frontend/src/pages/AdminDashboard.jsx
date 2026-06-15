@@ -975,8 +975,6 @@ function AdminDashboard() {
               </motion.div>
             )}
 
-          </AnimatePresence>
-
             {/* ══ SEARCH LOGS ════════════════════════════════════════════════ */}
             {activeSection === 'searchlogs' && (
               <motion.div key="searchlogs" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
