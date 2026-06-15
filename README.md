@@ -11,7 +11,7 @@ React Frontend (port 5173)
         ↓
 FastAPI Gateway (port 8000)   ←→   Node.js Backend (port 3001)
         ↓
-Spring Boot Backend (port 8081)
+Spring Boot Backend (port 8082)
         ↓
 PostgreSQL Database (port 5432)
 ```
@@ -40,7 +40,7 @@ PostgreSQL Database (port 5432)
 ```bash
 cd backend
 mvn spring-boot:run
-# Runs on http://localhost:8081
+# Runs on http://127.0.0.1:8082
 ```
 
 ### 3. FastAPI Gateway
@@ -48,8 +48,8 @@ mvn spring-boot:run
 cd gateway
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
-# Runs on http://localhost:8000
-# Swagger docs: http://localhost:8000/docs
+# Runs on http://127.0.0.1:8000
+# Swagger docs: http://127.0.0.1:8000/docs
 ```
 
 ### 4. Node.js Backend
@@ -57,7 +57,7 @@ uvicorn main:app --reload --port 8000
 cd node-backend
 npm install
 npm start
-# Runs on http://localhost:3001
+# Runs on http://127.0.0.1:3001
 ```
 
 ### 5. React Frontend
@@ -90,7 +90,7 @@ node seed_products.js
 - Request/response logging middleware
 - Health check: `GET /gateway/health`
 - Routes: `/api/auth/*`, `/api/items/*`, `/api/categories/*`
-- Swagger UI: `http://localhost:8000/docs`
+- Swagger UI: `http://127.0.0.1:8000/docs`
 
 ### Spring Boot Security — JWT + RBAC
 - `JwtUtil` — HS256 token generation with role claim

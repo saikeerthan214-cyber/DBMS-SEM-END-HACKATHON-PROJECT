@@ -22,7 +22,7 @@ function httpPost(path, body, token) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const options = {
-      hostname: 'localhost', port: 8081, path,
+      hostname: 'localhost', port: 8082, path,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -47,7 +47,7 @@ function httpPost(path, body, token) {
 function httpGetAuth(path, token) {
   return new Promise((resolve, reject) => {
     http.get({
-      hostname: 'localhost', port: 8081, path,
+      hostname: 'localhost', port: 8082, path,
       headers: { Authorization: `Bearer ${token}` },
     }, (res) => {
       let data = '';
@@ -102,7 +102,7 @@ async function main() {
   });
 
   if (!loginRes.body?.token) {
-    console.error('❌ Login failed. Make sure backend is running on port 8081.');
+    console.error('❌ Login failed. Make sure backend is running on port 8082.');
     process.exit(1);
   }
   const token = loginRes.body.token;
@@ -173,6 +173,6 @@ async function main() {
 
 main().catch(err => {
   console.error('❌ Error:', err.message);
-  console.log('💡 Make sure the backend is running on http://localhost:8081');
+  console.log('💡 Make sure the backend is running on http://127.0.0.1:8082');
   process.exit(1);
 });

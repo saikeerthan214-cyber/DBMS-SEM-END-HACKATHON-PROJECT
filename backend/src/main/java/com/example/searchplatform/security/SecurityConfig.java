@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -16,7 +17,19 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
+/**
+ * Spring Security configuration.
+ *
+ * Strategy: stateless JWT — no sessions, no CSRF needed.
+ *
+ * RBAC is enforced at two levels:
+ *   1. URL-level rules here (coarse-grained)
+ *   2. @PreAuthorize on controller methods (fine-grained, auditable)
+ *
+ * @EnableMethodSecurity activates @PreAuthorize / @PostAuthorize support.
+ */
 @Configuration
+@EnableMethodSecurity          // enables @PreAuthorize on controllers
 public class SecurityConfig {
 
     @Autowired
@@ -24,7 +37,8 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        // BCrypt with strength 12 — good balance of security and speed
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean
@@ -35,17 +49,23 @@ public class SecurityConfig {
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Auth endpoints — public
+
+                // ── Public auth endpoints ──────────────────────
                 .requestMatchers("/api/auth/**").permitAll()
-                // GET items and categories — public (search/browse)
+
+                // ── Public read-only access ────────────────────
                 .requestMatchers(HttpMethod.GET, "/api/items/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
-                // Write operations — require ADMIN role
-                .requestMatchers(HttpMethod.POST, "/api/items/**").hasRole("ADMIN")
+
+                // ── Write operations → ADMIN role required ─────
+                .requestMatchers(HttpMethod.POST,   "/api/items/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/api/items/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/items/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/categories/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST,   "/api/categories/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/api/categories/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/categories/**").hasRole("ADMIN")
-                // Everything else — authenticated
+
+                // ── Everything else requires authentication ────
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
@@ -56,8 +76,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Allow any localhost port so Vite port changes don't break CORS
-        config.setAllowedOriginPatterns(List.of("http://localhost:*"));
+        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
